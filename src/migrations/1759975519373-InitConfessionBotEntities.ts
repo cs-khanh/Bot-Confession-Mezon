@@ -18,6 +18,7 @@ export class InitConfessionBotEntities1759975519373 implements MigrationInterfac
         await queryRunner.query(`
             CREATE TABLE "confession" (
                 "id" uuid NOT NULL DEFAULT uuid_generate_v4(), 
+                "confession_number" SERIAL NOT NULL, 
                 "content" text NOT NULL, 
                 "author_hash" character varying NOT NULL,
                 "messageId" character varying, 
@@ -30,7 +31,8 @@ export class InitConfessionBotEntities1759975519373 implements MigrationInterfac
                 "created_at" TIMESTAMP NOT NULL DEFAULT now(), 
                 "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
                 "posted_at" TIMESTAMP,
-                CONSTRAINT "PK_confession_id" PRIMARY KEY ("id")
+                CONSTRAINT "PK_confession_id" PRIMARY KEY ("id"),
+                CONSTRAINT "UQ_confession_number" UNIQUE ("confession_number")
             )
         `);
 
@@ -74,6 +76,10 @@ export class InitConfessionBotEntities1759975519373 implements MigrationInterfac
         // Create indices for better performance
         await queryRunner.query(`
             CREATE INDEX "IDX_confession_status" ON "confession" ("status")
+        `);
+        
+        await queryRunner.query(`
+            CREATE INDEX "IDX_confession_number" ON "confession" ("confession_number")
         `);
         
         await queryRunner.query(`

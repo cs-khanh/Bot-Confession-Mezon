@@ -53,8 +53,13 @@ export class RejectCommand extends CommandMessage {
             // Tìm Confession dựa trên ID hoặc phần đầu của ID
             let confession;
             
+            // Kiểm tra xem đầu vào có phải là số không (confession number)
+            if (!isNaN(Number(confessionIdInput))) {
+                const confessionNumber = Number(confessionIdInput);
+                confession = await this.confessionRepository.findOne({ where: { confessionNumber } });
+            }
             // Kiểm tra xem đây có phải là UUID đầy đủ không
-            if (this.isValidUUID(confessionIdInput)) {
+            else if (this.isValidUUID(confessionIdInput)) {
                 confession = await this.confessionService.findById(confessionIdInput);
             } else {
                 // Nếu không phải UUID đầy đủ, tìm kiếm dựa trên phần đầu của ID
@@ -68,11 +73,9 @@ export class RejectCommand extends CommandMessage {
                 }, message);
             }
             
-            const shortId = confession.id.substring(0, 8);
-            
             if (confession.status === ConfessionStatus.REJECTED) {
                 return this.replyMessageGenerate({
-                    messageContent: `Confession #${shortId} đã bị từ chối trước đó.`
+                    messageContent: `Confession #${confession.confessionNumber} đã bị từ chối trước đó.`
                 }, message);
             }
 
@@ -88,11 +91,11 @@ export class RejectCommand extends CommandMessage {
 
             // Trả lời cho người kiểm duyệt
             return this.replyMessageGenerate({
-                messageContent: `Confession #${shortId} đã bị từ chối với lý do: ${reason}`
+                messageContent: `Confession #${confession.confessionNumber} đã bị từ chối với lý do: ${reason}`
             }, message);
             
         } catch (error) {
-            this.logger.error(`Lỗi khi từ chối Confession #${confessionIdInput}`, error);
+            this.logger.error(`Lỗi khi từ chối Confession ${confessionIdInput}`, error);
             return this.replyMessageGenerate({
                 messageContent: 'There was an error processing your request. Please try again.'
             }, message);

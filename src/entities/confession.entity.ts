@@ -10,6 +10,9 @@ export enum ConfessionStatus {
 export class Confession {
     @PrimaryGeneratedColumn('uuid')
     id: string;
+    
+    @Column({ name: 'confession_number', unique: true })
+    confessionNumber: number;
 
     @Column({ type: 'text' })
     content: string;

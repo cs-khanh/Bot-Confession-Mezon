@@ -157,17 +157,17 @@ export class ConfessCommand extends CommandMessage {
             // Nếu confession đã được approve ngay lập tức (auto moderation), thông báo cho người dùng
             if (confession.status === ConfessionStatus.APPROVED) {
                 return this.replyMessageGenerate({
-                    messageContent: `Cảm ơn bạn! Confession của bạn đã được chấp nhận và đã được đăng lên channel. ID: ${confession.id.substring(0, 8).toUpperCase()}`
+                    messageContent: `Cảm ơn bạn! Confession #${confession.confessionNumber} của bạn đã được chấp nhận và đã được đăng lên channel.`
                 }, message);
             } else if (confession.status === ConfessionStatus.REJECTED) {
                 return this.replyMessageGenerate({
-                    messageContent: `Confession của bạn đã bị từ chối vì vi phạm quy định. ID: ${confession.id.substring(0, 8).toUpperCase()}`
+                    messageContent: `Confession #${confession.confessionNumber} của bạn đã bị từ chối vì vi phạm quy định.`
                 }, message);
             } else {
                 // Nếu đang pending, thông báo cần chờ kiểm duyệt
                 if (this.directMessageEnabled) {
                     return this.replyMessageGenerate({
-                        messageContent: `Cảm ơn bạn! Confession của bạn đã được nhận và đang chờ kiểm duyệt. ID: ${confession.id.substring(0, 8).toUpperCase()}`
+                        messageContent: `Cảm ơn bạn! Confession #${confession.confessionNumber} của bạn đã được nhận và đang chờ kiểm duyệt.`
                     }, message);
                 } else {
                     return this.replyMessageGenerate({
@@ -195,7 +195,7 @@ export class ConfessCommand extends CommandMessage {
 
         const statusText = isRejected ? '❌ ### Rejected Confession' : '### New Confession';
         const messageLines = [
-            `${statusText} (ID: ${confession.id.substring(0, 8).toUpperCase()})`,
+            `${statusText} #${confession.confessionNumber}`,
             ''
         ];
         
@@ -224,8 +224,8 @@ export class ConfessCommand extends CommandMessage {
         
         // Thêm các lệnh nếu không phải confession đã bị từ chối
         if (!isRejected) {
-            messageLines.push('To approve: `!approve ' + confession.id + '`');
-            messageLines.push('To reject: `!reject ' + confession.id + '`');
+            messageLines.push(`To approve: \`!approve ${confession.confessionNumber}\` hoặc \`!approve ${confession.id}\``);
+            messageLines.push(`To reject: \`!reject ${confession.confessionNumber}\` hoặc \`!reject ${confession.id}\``);
         }
         
         const messageText = messageLines.join('\n');

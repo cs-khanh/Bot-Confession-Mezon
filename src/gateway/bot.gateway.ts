@@ -58,7 +58,48 @@ export class BotGateway {
         });
 
         this.client.onMessageReaction((msg: ApiMessageReaction) => {
+            this.logger.log(`[REACTION DEBUG] Received reaction event: ${JSON.stringify(msg)}`);
+            
+            // Emit standard event
             this.eventEmitter.emit(Events.MessageReaction, msg);
+            
+            // Kiểm tra cấu trúc msg chi tiết
+            this.logger.log(`[REACTION DEBUG] Message ID: ${msg.message_id}`);
+            this.logger.log(`[REACTION DEBUG] Full structure: ${JSON.stringify(msg, null, 2)}`);
+            
+            // Emit custom events for add/remove
+            // ApiMessageReaction có thể có cấu trúc khác, nên ta cần xử lý linh hoạt
+            // Giả định: msg có thể chứa action hoặc emoji và số lượng
+            const action = (msg as any).action;
+            const emoji = (msg as any).emoji || (msg as any).name;
+            
+            // Extract count from various possible structures
+            let count;
+            if ((msg as any).count !== undefined) {
+                count = (msg as any).count;
+            } else if ((msg as any).reactions && (msg as any).reactions[emoji]) {
+                count = (msg as any).reactions[emoji];
+            } else if ((msg as any).data?.reactions && (msg as any).data.reactions[emoji]) {
+                count = (msg as any).data.reactions[emoji];
+            } else {
+                // Default fallback
+                count = 1;
+            }
+            
+            const userId = (msg as any).userId || (msg as any).user_id;
+            const messageId = msg.message_id;
+            
+            this.logger.log(`[REACTION DEBUG] Processed reaction data: emoji=${emoji}, count=${count}, action=${action}`);
+            
+            if (messageId) {
+                const eventType = action === 'remove' ? 'reaction.remove' : 'reaction.add';
+                this.eventEmitter.emit(eventType, {
+                    message_id: messageId,
+                    reaction: emoji,
+                    count: count,
+                    user_id: userId
+                });
+            }
         });
 
         this.client.onChannelCreated((channel: ChannelCreatedEvent) => {

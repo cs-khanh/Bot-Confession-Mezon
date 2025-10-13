@@ -59,8 +59,13 @@ export class ApproveCommand extends CommandMessage {
             // Tìm Confession dựa trên ID hoặc phần đầu của ID
             let confession;
             
+            // Kiểm tra xem đầu vào có phải là số không (confession number)
+            if (!isNaN(Number(confessionIdInput))) {
+                const confessionNumber = Number(confessionIdInput);
+                confession = await this.confessionRepository.findOne({ where: { confessionNumber } });
+            }
             // Kiểm tra xem đây có phải là UUID đầy đủ không
-            if (this.isValidUUID(confessionIdInput)) {
+            else if (this.isValidUUID(confessionIdInput)) {
                 confession = await this.confessionService.findById(confessionIdInput);
             } else {
                 // Nếu không phải UUID đầy đủ, tìm kiếm dựa trên phần đầu của ID
@@ -74,11 +79,9 @@ export class ApproveCommand extends CommandMessage {
                 }, message);
             }
             
-            const shortId = confession.id.substring(0, 8);
-            
             if (confession.status === ConfessionStatus.APPROVED) {
                 return this.replyMessageGenerate({
-                    messageContent: `Confession #${shortId} đã được phê duyệt trước đó.`
+                    messageContent: `Confession #${confession.confessionNumber} đã được phê duyệt trước đó.`
                 }, message);
             }
 
@@ -89,17 +92,27 @@ export class ApproveCommand extends CommandMessage {
             // Cập nhật trạng thái thành đã phê duyệt
             await this.confessionService.updateStatus(confession.id, ConfessionStatus.APPROVED);
 
-            // Đăng Confession lên kênh sử dụng formatter tiêu chuẩn
-            const confessionMessage = ConfessionFormatter.createMessageObject(confession, this.confessionChannelId);
+            // Đăng Confession lên kênh với tin nhắn tiêu đề trước và confession sẽ trả lời tin nhắn đó
+            const [headerMessage, confessionMessage] = ConfessionFormatter.createHeaderAndConfessionMessages(
+                confession, 
+                this.confessionChannelId
+            );
+            
+            // Add header message to queue first
+            this.messageQueue.addMessage(headerMessage);
+            
+            // Add confession message to queue (will be processed after header message)
             this.messageQueue.addMessage(confessionMessage);
+            
+            this.logger.log(`Added header message and confession #${confession.confessionNumber} to the queue`);
 
             // Trả lời cho người kiểm duyệt
             return this.replyMessageGenerate({
-                messageContent: `Confession #${shortId} đã được phê duyệt và đăng lên kênh confessions.`
+                messageContent: `Confession #${confession.confessionNumber} đã được phê duyệt và đăng lên kênh confessions.`
             }, message);
             
         } catch (error) {
-            this.logger.error(`Lỗi khi phê duyệt Confession #${confessionIdInput}`, error);
+            this.logger.error(`Lỗi khi phê duyệt Confession ${confessionIdInput}`, error);
             return this.replyMessageGenerate({
                 messageContent: 'There was an error processing your request. Please try again.'
             }, message);

@@ -110,11 +110,19 @@ export class AutoModerationService {
      */
     private async sendApprovedConfession(confession: Confession): Promise<void> {
         try {
-            // Sử dụng utility để tạo tin nhắn với định dạng chuẩn
-            const confessionMessage = ConfessionFormatter.createMessageObject(confession, this.confessionChannelId);
+            // Sử dụng utility để tạo tin nhắn tiêu đề và tin nhắn confession
+            const [headerMessage, confessionMessage] = ConfessionFormatter.createHeaderAndConfessionMessages(
+                confession, 
+                this.confessionChannelId
+            );
             
-            // Thêm vào hàng đợi tin nhắn
+            // Thêm tin nhắn tiêu đề vào hàng đợi trước
+            this.messageQueue.addMessage(headerMessage);
+            
+            // Thêm tin nhắn confession vào hàng đợi sau (sẽ trả lời tin nhắn tiêu đề)
             this.messageQueue.addMessage(confessionMessage);
+            
+            this.logger.log(`Added header message and confession #${confession.confessionNumber} to the queue for auto-approved confession`);
             
             // Cập nhật thông tin về thời gian đăng và kênh đăng
             confession.postedAt = new Date();

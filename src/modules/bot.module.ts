@@ -6,6 +6,7 @@ import { TopConfessionCommand } from '@app/command/topconfession.command';
 import { StatsCommand } from '@app/command/stats.command';
 import { ApproveCommand } from '@app/command/approve.command';
 import { RejectCommand } from '@app/command/reject.command';
+import { DBStatusCommand } from '@app/command/dbstatus.command';
 import { ClientConfigService } from '@app/config/client.config';
 import { BotGateway } from '@app/gateway/bot.gateway';
 import { EventListenerChannelMessage, EventListenerReaction } from '@app/listeners';
@@ -87,6 +88,7 @@ import { TikTokModule } from './tiktok.module';
         NewsCommand,
         TikTokCommand,
         CheckCommand,
+        DBStatusCommand,
 
     ],
     controllers: [],

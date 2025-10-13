@@ -40,6 +40,7 @@ export class MezonClientService {
             return await this.retryOperation(async () => {
                 const channel = await this.client.channels.fetch(replyMessage.channel_id);
                 
+                // Check if this is a reply to another message using ref array
                 if (replyMessage?.ref?.length && replyMessage?.message_id) {
                     const message = await channel.messages.fetch(replyMessage.message_id);
                     return await message.reply(
@@ -53,6 +54,40 @@ export class MezonClientService {
                     );
                 }
                 
+                // Check if this is a reply to another message using reply_to parameter
+                if (replyMessage.msg?.reply_to) {
+                    this.logger.log(`[REPLY] Sending message as a reply to ${replyMessage.msg.reply_to}`);
+                    
+                    // For Mezon SDK, we might need to create a ref object for the reply
+                    const messageToReplyTo = replyMessage.msg.reply_to;
+                    
+                    try {
+                        // Fetch the message we're replying to first
+                        const targetMessage = await channel.messages.fetch(messageToReplyTo);
+                        
+                        if (targetMessage) {
+                            this.logger.log(`[REPLY] Successfully fetched message to reply to: ${messageToReplyTo}`);
+                            
+                            // Create a reply using the reply method on the message
+                            return await targetMessage.reply(
+                                replyMessage.msg,
+                                replyMessage.mentions,
+                                replyMessage.attachments,
+                                replyMessage.mention_everyone,
+                                replyMessage.anonymous_message,
+                                replyMessage.topic_id,
+                                replyMessage.code,
+                            );
+                        } else {
+                            this.logger.warn(`[REPLY] Could not fetch message to reply to: ${messageToReplyTo}`);
+                        }
+                    } catch (error) {
+                        this.logger.error(`[REPLY] Error fetching message to reply to: ${error.message}`);
+                        // Fall back to regular send if we can't fetch the target message
+                    }
+                }
+                
+                // Regular send if not a reply or if reply target couldn't be fetched
                 return await channel.send(
                     replyMessage.msg,
                     replyMessage.mentions,

@@ -26,7 +26,7 @@ export class StatsCommand extends CommandMessage {
             
             // Format the stats message
             const lines = [
-                '📊 **Confession Statistics**',
+                '📊 ** Confession Statistics**',
                 '',
                 `**Total Confessions:** ${stats.totalConfessions}`,
                 `**Approved Confessions:** ${stats.approvedConfessions}`,
@@ -48,7 +48,7 @@ export class StatsCommand extends CommandMessage {
             
             lines.push('');
             lines.push('Use `!topconfession` to see this week\'s top confessions!');
-            
+            lines.push('                                        ');
             const messageContent = lines.join('\n');
             
             // Send the formatted message

@@ -20,25 +20,68 @@ export interface ModerationResult {
 }
 
 // Template cho prompt gửi đến Gemini API
+// const GEMINI_MODERATION_PROMPT_TEMPLATE = `
+// Bạn là hệ thống KIỂM DUYỆT cho ứng dụng Confession.
+// NHIỆM VỤ: Phân tích nội dung (và HÌNH ẢNH nếu có) theo tiêu chí dưới đây:
+
+// Tiêu chí phân loại:
+// - APPROVE: Nội dung tích cực, chia sẻ cá nhân lành mạnh, xin thông tin ai đó, chia sẻ học tập, công nghệ, giáo dục, đời sống, tình cảm, tình yêu, công việc, sức khỏe, các chủ đề xã hội tích cực
+// - REJECT: Nội dung quấy rối, thù địch, spam, từ ngữ tục tĩu, xúc phạm nặng, bạo lực, nội dung 18+, nội dung nguy hiểm, tự tử, ma túy, vũ khí, khủng bố
+
+// Yêu cầu đánh giá:
+// 1) Hiểu teencode/lách chữ, đa ngôn ngữ, emoji, ẩn ý/mỉa mai.
+// 2) Với hình ảnh/meme/screenshot: đọc chữ trong ảnh (OCR), xem ngữ cảnh biểu tượng/cử chỉ, check trang phục/hành vi 18+ hoặc bạo lực/ma túy/vũ khí.
+// 3) Ưu tiên an toàn người dùng; nếu nghi ngờ có vi phạm rõ rệt → REJECT.
+// Gán nhãn nội dung tags nếu có, ví dụ: ["love", "school", "family", "friends", "study", "work", "health"...]. Nếu không có thể gán rỗng.
+// Trả về kết quả dưới dạng JSON đơn giản với các trường:
+// - decision: "APPROVE" hoặc "REJECT"
+// - reason: lý do ngắn gọn cho quyết định
+// - tags: mảng các từ khóa/chủ đề liên quan đến nội dung 
+
+// Nội dung cần phân tích: "$CONTENT"
+// `;
 const GEMINI_MODERATION_PROMPT_TEMPLATE = `
+
 Bạn là hệ thống KIỂM DUYỆT cho ứng dụng Confession.
-NHIỆM VỤ: Phân tích nội dung (và HÌNH ẢNH nếu có) theo tiêu chí dưới đây:
+
+NHIỆM VỤ: Phân tích nội dung (và HÌNH ẢNH nếu có) với mức độ kiểm duyệt nhẹ nhàng, ngoại trừ các nội dung liên quan đến chính trị, tôn giáo, và chủ quyền lãnh thổ Việt Nam (kiểm duyệt mạnh).
 
 Tiêu chí phân loại:
-- APPROVE: Nội dung tích cực, chia sẻ cá nhân lành mạnh, chia sẻ học tập, công nghệ, giáo dục, đời sống, tình cảm, tình yêu, công việc, sức khỏe, các chủ đề xã hội tích cực
-- REJECT: Nội dung quấy rối, thù địch, spam, từ ngữ tục tĩu, xúc phạm nặng, bạo lực, nội dung 18+, nội dung nguy hiểm, tự tử, ma túy, vũ khí, khủng bố
+
+- APPROVE: Nội dung lành mạnh, tích cực, bao gồm chia sẻ cá nhân, hỏi thông tin, học tập, công nghệ, giáo dục, đời sống, tình cảm, tình yêu, công việc, sức khỏe, hoặc các chủ đề xã hội không nhạy cảm. Những nội dung 18+, tục tĩu, bạo lực ở mức độ nhẹ thì vẫn cho phép.
+
+- REJECT:
+
+  - Nội dung chứa quấy rối, thù địch, spam, từ ngữ tục tĩu nghiêm trọng, xúc phạm nặng, bạo lực, nội dung 18+, nội dung nguy hiểm (tự tử, ma túy, vũ khí, khủng bố).
+
+  - Nội dung liên quan đến chính trị, tôn giáo, hoặc chủ quyền lãnh thổ Việt Nam có dấu hiệu kích động, gây tranh cãi, hoặc vi phạm pháp luật.
 
 Yêu cầu đánh giá:
-1) Hiểu teencode/lách chữ, đa ngôn ngữ, emoji, ẩn ý/mỉa mai.
-2) Với hình ảnh/meme/screenshot: đọc chữ trong ảnh (OCR), xem ngữ cảnh biểu tượng/cử chỉ, check trang phục/hành vi 18+ hoặc bạo lực/ma túy/vũ khí.
-3) Ưu tiên an toàn người dùng; nếu nghi ngờ có vi phạm rõ rệt → REJECT.
-Gán nhãn nội dung tags nếu có, ví dụ: ["love", "school", "family", "friends", "study", "work", "health"...]. Nếu không có thể gán rỗng.
-Trả về kết quả dưới dạng JSON đơn giản với các trường:
-- decision: "APPROVE" hoặc "REJECT"
-- reason: lý do ngắn gọn cho quyết định
-- tags: mảng các từ khóa/chủ đề liên quan đến nội dung 
+
+1. Hiểu teencode, lách chữ, đa ngôn ngữ, emoji, ẩn ý, hoặc mỉa mai.
+
+2. Với hình ảnh/meme/screenshot:
+
+   - Đọc chữ trong ảnh (OCR).
+
+   - Phân tích ngữ cảnh, biểu tượng, cử chỉ.
+
+   - Kiểm tra trang phục/hành vi liên quan đến nội dung 18+, bạo lực, ma túy, vũ khí, hoặc các chủ đề nhạy cảm về chính trị, tôn giáo, chủ quyền lãnh thổ Việt Nam.
+
+3. Ưu tiên trải nghiệm người dùng; chỉ REJECT khi nội dung vi phạm rõ ràng hoặc thuộc các chủ đề nhạy cảm (chính trị, tôn giáo, chủ quyền lãnh thổ).
+
+4. Gán nhãn nội dung bằng các tag (nếu có), ví dụ: ["love", "school", "family", "friends", "study", "work", "health"]. Nếu không có tag phù hợp, để mảng rỗng.
+
+Định dạng trả về: JSON với các trường:
+
+    - decision: "APPROVE" hoặc "REJECT".
+
+    - reason: Lý do ngắn gọn cho quyết định.
+
+    - tags: Mảng các từ khóa/chủ đề liên quan đến nội dung.
 
 Nội dung cần phân tích: "$CONTENT"
+
 `;
 
 @Injectable()
