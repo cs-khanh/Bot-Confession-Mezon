@@ -7961,7 +7961,7 @@ __metadata:
     eslint-config-prettier: "npm:^9.0.0"
     eslint-plugin-prettier: "npm:^5.0.0"
     jest: "npm:^29.5.0"
-    mezon-sdk: "npm:^2.8.0"
+    mezon-sdk: "npm:^2.8.20"
     pg: "npm:^8.16.3"
     prettier: "npm:^3.0.0"
     reflect-metadata: "npm:^0.2.0"
@@ -7980,19 +7980,19 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"mezon-sdk@npm:^2.8.0":
-  version: 2.8.18
-  resolution: "mezon-sdk@npm:2.8.18"
+"mezon-sdk@npm:^2.8.20":
+  version: 2.8.20
+  resolution: "mezon-sdk@npm:2.8.20"
   dependencies:
     "@types/ws": "npm:^8.5.12"
     base64-arraybuffer: "npm:^1.0.2"
     better-sqlite3: "npm:^11.10.0"
     jest-cucumber: "npm:^3.0.1"
     js-base64: "npm:^3.7.4"
-    mmn-client-js: "npm:^1.0.4"
+    mmn-client-js: "npm:^1.0.10"
     npm-run-all: "npm:^4.1.5"
     ws: "npm:^8.18.0"
-  checksum: 10c0/264a7cc26b6f2cee9ea6c8b1350ece23e3732b2c01477310aa1f339b05c29d16c9f6ef11411cdcbb028076f9cb5b6f61c401046a0daffc62b74f4f528da139f4
+  checksum: 10c0/f96792474c6ba47286195db7d8d4c6a1a0f4d2179dff546d71d60f17f63b5b01d44ecc8b23c4b96801dc1b221da023d1c0cfdbbe30fefb77f46be0aeefef610f
   languageName: node
   linkType: hard
 
@@ -8204,15 +8204,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"mmn-client-js@npm:^1.0.4":
-  version: 1.0.7
-  resolution: "mmn-client-js@npm:1.0.7"
+"mmn-client-js@npm:^1.0.10":
+  version: 1.0.10
+  resolution: "mmn-client-js@npm:1.0.10"
   dependencies:
     bip39: "npm:^3.1.0"
     bs58: "npm:^5.0.0"
     crypto-js: "npm:^4.2.0"
     tweetnacl: "npm:^1.0.3"
-  checksum: 10c0/a7d1231842baeed623545bd51e260d1e4311a87c818c53a841925199cc16652dc3410f9f6dce05f50496258a0f72ec2d0e9aa22b28ba442f602ee9177597d08e
+  checksum: 10c0/972409f0a8d343fe770132bcea899aae12dcdb018c90a87894fc6e2a593083c04424455178603258249cfbb95fab1decac13ca84401502cd384621be34789124
   languageName: node
   linkType: hard
 

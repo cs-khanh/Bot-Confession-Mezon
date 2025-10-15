@@ -2,6 +2,7 @@ import { ModuleMetadata } from '@nestjs/common';
 import { MezonClient } from 'mezon-sdk';
 
 export interface MezonClientConfig {
+    botId: string;
     token: string;
 }
 

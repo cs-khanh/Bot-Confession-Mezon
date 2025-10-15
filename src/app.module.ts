@@ -21,6 +21,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
                 POSTGRES_USER: Joi.string().required(),
                 POSTGRES_PASSWORD: Joi.string().required(),
                 POSTGRES_DB: Joi.string().required(),
+                BOT_ID: Joi.string().required(),
                 MEZON_TOKEN: Joi.string().required(),
                 
                 // Confession Bot required fields

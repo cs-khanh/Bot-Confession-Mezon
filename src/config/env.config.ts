@@ -11,6 +11,7 @@ export default () => ({
     POSTGRES_USER: process.env.POSTGRES_USER || "",
     POSTGRES_PASSWORD: process.env.POSTGRES_PASSWORD || "",
     POSTGRES_DB: process.env.POSTGRES_DB || "",
+    BOT_ID: process.env.BOT_ID || "",
     MEZON_TOKEN: process.env.MEZON_TOKEN || "",
     
     // Confession Bot Configuration

@@ -5,7 +5,7 @@ async function testReaction() {
   const logger = new Logger('ReactionTest');
   
   // Thay thế bằng token thực tế của bạn
-  const client = new MezonClient(process.env.MEZON_TOKEN || '');
+  const client = new MezonClient({ botId: process.env.BOT_ID || '', token: process.env.MEZON_TOKEN || '' });
   
   try {
     await client.login();

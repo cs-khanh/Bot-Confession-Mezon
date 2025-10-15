@@ -9,31 +9,89 @@ export class MezonClientService {
     private readonly logger = new Logger(MezonClientService.name);
     private client: MezonClient;
     public token: string;
+    public botId: string;
 
+    // constructor(clientConfigs: MezonClientConfig) {
+    //     // Store provided token and botId for later use
+    //     this.token = clientConfigs.token ?? '';
+    //     this.botId = clientConfigs.botId ?? '';
+    //     this.logger.log(`Tui in ra xem nè: botId=${this.botId}, tokenLength=${this.token?.length}`);
+    //     // New mezon-sdk requires an object with botId and token
+    //     const client = { botId: this.botId || undefined, token: this.token || undefined };
+    //     try {
+    //         this.client = new MezonClient(client as any);
+    //         this.logger.log(`[MezonClientService] Initialized MezonClient with botId=${this.botId}, tokenLength=${this.token?.length}`);
+    //     } catch (error) {
+    //         this.logger.error('[MezonClientService] Failed to construct MezonClient with object signature', error);
+    //         // Fallback: try old string-based constructor for backward compatibility
+    //         try {
+    //             this.client = new MezonClient(this.token as any);
+    //             this.logger.log('[MezonClientService] Fallback: constructed MezonClient with token string');
+    //         } catch (err) {
+    //             this.logger.error('[MezonClientService] Fallback constructor also failed', err);
+    //             // Re-throw since we can't construct any client correctly
+    //             throw err;
+    //         }
+    //     }
+    // }
     constructor(clientConfigs: MezonClientConfig) {
-        this.client = new MezonClient(clientConfigs.token);
+        this.client = new MezonClient({ botId: clientConfigs.botId, token: clientConfigs.token });
     }
 
     getToken(): string {
         return this.token;
     }
 
-    async initializeClient(): Promise<void> {
-        try {
-            const result = await this.client.login();
-            this.logger.log(SUCCESS_MESSAGES.CLIENT_AUTHENTICATED, result);
-            const data = JSON.parse(result);
-            this.token = data?.token;
-        } catch (error) {
-            this.logger.error(ERROR_MESSAGES.CLIENT_AUTHENTICATION, error);
-            throw error;
+    /**
+     * Try to login with retries. Sets isAuthenticated flag.
+     * Returns true if authenticated, false otherwise.
+     */
+    async initializeClient(retries = 3, baseDelay = 1000): Promise<boolean> {
+        let attempt = 0;
+        while (attempt < retries) {
+            attempt++;
+            try {
+                this.logger.log(`[MezonClientService] Attempting login (attempt ${attempt}/${retries})`);
+                const result = await this.client.login();
+                this.logger.log(SUCCESS_MESSAGES.CLIENT_AUTHENTICATED, result);
+                const data = JSON.parse(result);
+                this.token = data?.token ?? this.token;
+                this.botId = data?.bot_id ?? this.botId;
+                this.logger.log(`[MezonClientService] Authentication succeeded. botId=${this.botId}`);
+                return true;
+            } catch (error: any) {
+                // Log detailed error info to help debugging Mezon SDK failures
+                this.logger.error('[MezonClientService] error authenticating', error?.message ?? error);
+                if (error?.stack) {
+                    this.logger.error('[MezonClientService] stack:', error.stack);
+                }
+                // Some SDK errors include a response object with more details
+                try {
+                    if (error?.response) {
+                        // Attempt to stringify response safely
+                        const resp = typeof error.response === 'object' ? JSON.stringify(error.response) : String(error.response);
+                        this.logger.error('[MezonClientService] response:', resp);
+                    }
+                } catch (e) {
+                    this.logger.error('[MezonClientService] failed to log error.response', e?.message ?? e);
+                }
+                
+
+                // Wait with exponential backoff
+                const delay = baseDelay * Math.pow(2, attempt - 1);
+                this.logger.warn(`[MezonClientService] Retry in ${delay}ms`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
         }
+        return false;
     }
 
     getClient(): MezonClient {
         return this.client;
     }
-
+    getBotId(): string {
+        return this.botId;
+    }
     async sendMessage(replyMessage: ReplyMezonMessage): Promise<any> {
         try {
             // Apply exponential backoff retry logic for handling rate limits
@@ -56,18 +114,31 @@ export class MezonClientService {
                 
                 // Check if this is a reply to another message using reply_to parameter
                 if (replyMessage.msg?.reply_to) {
-                    this.logger.log(`[REPLY] Sending message as a reply to ${replyMessage.msg.reply_to}`);
-                    
-                    // For Mezon SDK, we might need to create a ref object for the reply
                     const messageToReplyTo = replyMessage.msg.reply_to;
-                    
-                    try {
-                        // Fetch the message we're replying to first
-                        const targetMessage = await channel.messages.fetch(messageToReplyTo);
-                        
-                        if (targetMessage) {
-                            this.logger.log(`[REPLY] Successfully fetched message to reply to: ${messageToReplyTo}`);
-                            
+                    this.logger.log(`[REPLY] Sending message as a reply to ${messageToReplyTo}`);
+
+                    // Try fetching the target message with a few retries in case of propagation delay
+                    let targetMessage: any = null;
+                    const maxFetchAttempts = 4;
+                    for (let attempt = 1; attempt <= maxFetchAttempts; attempt++) {
+                        try {
+                            targetMessage = await channel.messages.fetch(messageToReplyTo);
+                            if (targetMessage) {
+                                this.logger.log(`[REPLY] Successfully fetched message to reply to: ${messageToReplyTo} (attempt ${attempt})`);
+                                break;
+                            }
+                        } catch (err: any) {
+                            // If the fetch failed, log and retry after a short delay
+                            this.logger.warn(`[REPLY] Attempt ${attempt} failed to fetch ${messageToReplyTo}: ${err.message || err}`);
+                        }
+
+                        // small backoff between attempts
+                        const backoffMs = 100 * attempt;
+                        await new Promise(res => setTimeout(res, backoffMs));
+                    }
+
+                    if (targetMessage) {
+                        try {
                             // Create a reply using the reply method on the message
                             return await targetMessage.reply(
                                 replyMessage.msg,
@@ -78,12 +149,12 @@ export class MezonClientService {
                                 replyMessage.topic_id,
                                 replyMessage.code,
                             );
-                        } else {
-                            this.logger.warn(`[REPLY] Could not fetch message to reply to: ${messageToReplyTo}`);
+                        } catch (err) {
+                            this.logger.error(`[REPLY] Error while replying to message ${messageToReplyTo}: ${err.message || err}`);
+                            // Fall through to regular send
                         }
-                    } catch (error) {
-                        this.logger.error(`[REPLY] Error fetching message to reply to: ${error.message}`);
-                        // Fall back to regular send if we can't fetch the target message
+                    } else {
+                        this.logger.error(`[REPLY] Could not fetch message ${messageToReplyTo} after ${maxFetchAttempts} attempts. Falling back to regular send.`);
                     }
                 }
                 
