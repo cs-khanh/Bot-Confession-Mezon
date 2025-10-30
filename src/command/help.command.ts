@@ -67,7 +67,7 @@ export class HelpCommand extends CommandMessage {
         // Add lưu ý quan trọng về lệnh check join
         messageContent += `### ⚠️ Lưu ý quan trọng\n`;
         messageContent += `• Nếu vừa cài đặt bot, hãy chạy \`!check join\` để bot có thể đăng tin vào các channel\n`;
-        messageContent += `• Người dùng thông thường chỉ có thể sử dụng: \`!confess\`, \`!help\`, \`!about\`, \`!ping\`\n`;
+        messageContent += `• Người dùng thông thường chỉ có thể sử dụng: \`!post\`, \`!help\`, \`!about\`, \`!ping\`\n`;
         messageContent += `• Các lệnh khác chỉ dành cho quản trị viên (admin)\n\n`;
         
         // Add usage examples
@@ -75,7 +75,7 @@ export class HelpCommand extends CommandMessage {
         
         // Lệnh cho người dùng thường
         messageContent += `#### Lệnh cho người dùng thường\n`;
-        messageContent += `• \`!confess Tôi thích một người trong lớp nhưng không dám nói\` - Gửi confession ẩn danh\n`;
+        messageContent += `• \`!post Tôi thích một người trong lớp nhưng không dám nói\` - Gửi confession ẩn danh\n`;
         messageContent += `• \`!help [lệnh]\` - Xem hướng dẫn sử dụng\n`;
         messageContent += `• \`!about\` - Xem thông tin về bot\n`;
         messageContent += `• \`!ping\` - Kiểm tra bot có hoạt động không\n\n`;
@@ -125,14 +125,14 @@ export class HelpCommand extends CommandMessage {
         
         // Add specific additional help for common commands
         switch (metadata.name) {
-            case 'confess':
+            case 'post':
                 helpText += '\n\n**Chi tiết:**\n';
                 helpText += 'Gửi confession ẩn danh để kiểm duyệt. Nếu được phê duyệt, confession sẽ được đăng lên kênh confessions.\n\n';
                 helpText += '**Quy tắc:** Không gửi nội dung vi phạm quy tắc cộng đồng như spam, quấy rối, hoặc thông tin cá nhân.\n\n';
-                helpText += '**Sử dụng hashtag:** Bạn có thể thêm hashtag vào confession để phân loại: `!confess Tôi thích một người #tình_cảm`\n\n';
+                helpText += '**Sử dụng hashtag:** Bạn có thể thêm hashtag vào confession để phân loại: `!post Tôi thích một người #tình_cảm`\n\n';
                 helpText += '**Ví dụ:**\n';
-                helpText += '`!confess Tôi đã vượt qua kỳ thi khó khăn nhất! #vui_mừng`\n';
-                helpText += '`!cf Tôi thích một người trong lớp nhưng không dám nói.`';
+                helpText += '`!post Tôi đã vượt qua kỳ thi khó khăn nhất! #vui_mừng`\n';
+                helpText += '`!p Tôi thích một người trong lớp nhưng không dám nói.`';
                 helpText += '--------------------------------------------';
                 break;
                 

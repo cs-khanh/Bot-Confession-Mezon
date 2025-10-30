@@ -59,48 +59,49 @@ export class BotGateway {
 
         this.client.onMessageReaction((msg: ApiMessageReaction) => {
             this.logger.log(`[REACTION DEBUG] Received reaction event: ${JSON.stringify(msg)}`);
-            
-            // Emit standard event
+
+            // Emit base event for logging/debugging
             this.eventEmitter.emit(Events.MessageReaction, msg);
-            
-            // Kiểm tra cấu trúc msg chi tiết
-            this.logger.log(`[REACTION DEBUG] Message ID: ${msg.message_id}`);
-            this.logger.log(`[REACTION DEBUG] Full structure: ${JSON.stringify(msg, null, 2)}`);
-            
-            // Emit custom events for add/remove
-            // ApiMessageReaction có thể có cấu trúc khác, nên ta cần xử lý linh hoạt
-            // Giả định: msg có thể chứa action hoặc emoji và số lượng
-            const action = (msg as any).action;
-            const emoji = (msg as any).emoji || (msg as any).name;
-            
-            // Extract count from various possible structures
-            let count;
-            if ((msg as any).count !== undefined) {
-                count = (msg as any).count;
-            } else if ((msg as any).reactions && (msg as any).reactions[emoji]) {
-                count = (msg as any).reactions[emoji];
-            } else if ((msg as any).data?.reactions && (msg as any).data.reactions[emoji]) {
-                count = (msg as any).data.reactions[emoji];
-            } else {
-                // Default fallback
-                count = 1;
-            }
-            
-            const userId = (msg as any).userId || (msg as any).user_id;
+
             const messageId = msg.message_id;
-            
-            this.logger.log(`[REACTION DEBUG] Processed reaction data: emoji=${emoji}, count=${count}, action=${action}`);
-            
-            if (messageId) {
-                const eventType = action === 'remove' ? 'reaction.remove' : 'reaction.add';
-                this.eventEmitter.emit(eventType, {
-                    message_id: messageId,
-                    reaction: emoji,
-                    count: count,
-                    user_id: userId
+            if (!messageId) return;
+
+            // Extract basic info
+            const emoji = (msg as any).emoji || (msg as any).name;
+            const action = (msg as any).action; // true = add, false = remove
+            const userId = (msg as any).sender_id || (msg as any).user_id;
+
+            // Try to determine how many reactions this user had for this emoji
+            let count = 1;
+            if ((msg as any).count !== undefined) count = (msg as any).count;
+            else if ((msg as any).reactions?.[emoji]) count = (msg as any).reactions[emoji];
+            else if ((msg as any).data?.reactions?.[emoji]) count = (msg as any).data.reactions[emoji];
+
+            this.logger.log(`[REACTION DEBUG] Parsed: emoji=${emoji}, count=${count}, action=${action}`);
+
+            // ADD → increase by +count
+            if (action === false) {
+                this.eventEmitter.emit('reaction.add', {
+                message_id: messageId,
+                reaction: emoji,
+                count: count,
+                user_id: userId,
                 });
+                this.logger.log(`[REACTION EMIT] ADD → ${emoji} (+${count}) message=${messageId}`);
             }
-        });
+
+            // REMOVE → remove all reactions of this emoji from that user
+            else if (action === true) {
+                this.eventEmitter.emit('reaction.remove', {
+                message_id: messageId,
+                reaction: emoji,
+                count: count, // remove the same number that user added
+                user_id: userId,
+                });
+                this.logger.log(`[REACTION EMIT] REMOVE → ${emoji} (-${count}) message=${messageId}`);
+            }
+    });
+
 
         this.client.onChannelCreated((channel: ChannelCreatedEvent) => {
             this.eventEmitter.emit(Events.ChannelCreated, channel);

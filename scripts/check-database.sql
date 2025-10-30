@@ -6,7 +6,10 @@ SELECT 'confession' as table_name, COUNT(*) as record_count FROM "confession"
 UNION ALL
 SELECT 'reaction_log' as table_name, COUNT(*) as record_count FROM "reaction_log"
 UNION ALL
+SELECT 'reaction' as table_name, COUNT(*) as record_count FROM "reaction"
+UNION ALL
 SELECT 'weekly_stats' as table_name, COUNT(*) as record_count FROM "weekly_stats";
+
 
 -- Check the latest confession
 SELECT 

@@ -33,11 +33,13 @@ import { ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { NewsModule } from './news.module';
 import { TikTokModule } from './tiktok.module';
+import { Reaction } from '@app/entities/reaction.entity';
+import { ReactionUser } from '@app/entities/reaction-user.entity';
 
 @Module({
     imports: [
         ScheduleModule.forRoot(),
-        TypeOrmModule.forFeature([Confession, ReactionLog, WeeklyStats]),
+        TypeOrmModule.forFeature([Confession, Reaction, ReactionUser, ReactionLog, WeeklyStats]),
 
         NewsModule,
         TikTokModule,

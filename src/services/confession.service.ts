@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Confession, ConfessionStatus } from '../entities/confession.entity';
 import { ReactionLog } from '../entities/reaction-log.entity';
+import { Reaction } from '../entities/reaction.entity';
+import { ReactionUser } from '../entities/reaction-user.entity';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -12,40 +14,39 @@ export class ConfessionService {
     constructor(
         @InjectRepository(Confession)
         private confessionRepository: Repository<Confession>,
-        @InjectRepository(ReactionLog)
-        private reactionLogRepository: Repository<ReactionLog>,
+        @InjectRepository(Reaction)
+        private reactionRepository: Repository<Reaction>,
+        @InjectRepository(ReactionUser) 
+        private reactionUserRepository: Repository<ReactionUser>,
     ) {}
 
+    // ================================
+    // CREATE & BASIC METHODS
+    // ================================
+
     async create(content: string, ipAddress: string, attachments?: any[]): Promise<Confession> {
-        // Generate a consistent but anonymous author hash based on IP
         const authorHash = this.generateAuthorHash(ipAddress);
-        
-        // Get the next confession number
         const nextNumber = await this.getNextConfessionNumber();
-        
+
         const confession = this.confessionRepository.create({
             content,
             authorHash,
             confessionNumber: nextNumber,
             status: ConfessionStatus.PENDING,
-            tags: null, // Initialize as null instead of empty array to avoid TypeORM issues
-            attachments: attachments || null, // Add attachments if provided
+            tags: null,
+            attachments: attachments || null,
         });
-        
+
         return this.confessionRepository.save(confession);
     }
-    
-    /**
-     * Get the next sequential confession number
-     */
+
     private async getNextConfessionNumber(): Promise<number> {
-        // Find the confession with the highest number
         const result = await this.confessionRepository.createQueryBuilder('confession')
             .select('MAX(confession.confession_number)', 'maxNumber')
             .getRawOne();
-            
+
         const maxNumber = result?.maxNumber || 0;
-        return maxNumber + 1; // Return next number in sequence
+        return maxNumber + 1;
     }
 
     async findById(id: string): Promise<Confession> {
@@ -59,61 +60,44 @@ export class ConfessionService {
         orderBy?: { [key: string]: 'ASC' | 'DESC' };
     }): Promise<[Confession[], number]> {
         const { status, take = 10, skip = 0, orderBy = { createdAt: 'DESC' } } = options || {};
-        
+
         const query = this.confessionRepository.createQueryBuilder('confession');
-        
+
         if (status) {
             query.where('confession.status = :status', { status });
         }
-        
+
         query.take(take);
         query.skip(skip);
-        
-        // Apply ordering
+
         Object.entries(orderBy).forEach(([key, order]) => {
             query.addOrderBy(`confession.${key}`, order);
         });
-        
+
         return query.getManyAndCount();
     }
 
     async findOne(id: string): Promise<Confession> {
         const confession = await this.confessionRepository.findOne({ where: { id } });
-        if (!confession) {
-            throw new NotFoundException(`Confession with ID ${id} not found`);
-        }
+        if (!confession) throw new NotFoundException(`Confession with ID ${id} not found`);
         return confession;
     }
 
     async updateStatus(id: string, status: ConfessionStatus, comment?: string): Promise<Confession> {
         const confession = await this.findById(id);
-        
-        if (!confession) {
-            throw new NotFoundException(`Confession with ID ${id} not found`);
-        }
-        
+        if (!confession) throw new NotFoundException(`Confession with ID ${id} not found`);
+
         confession.status = status;
-        
-        if (comment) {
-            confession.moderationComment = comment;
-        }
-        
-        if (status === ConfessionStatus.APPROVED) {
-            confession.postedAt = new Date();
-        }
-        
+        if (comment) confession.moderationComment = comment;
+        if (status === ConfessionStatus.APPROVED) confession.postedAt = new Date();
+
         return this.confessionRepository.save(confession);
     }
 
     async updateTags(id: string, tags: string[]): Promise<Confession> {
         const confession = await this.findById(id);
-        
-        if (!confession) {
-            throw new NotFoundException(`Confession with ID ${id} not found`);
-        }
-        
+        if (!confession) throw new NotFoundException(`Confession with ID ${id} not found`);
         confession.tags = tags;
-        
         return this.confessionRepository.save(confession);
     }
 
@@ -123,301 +107,270 @@ export class ConfessionService {
         confession.channelId = channelId;
         return this.confessionRepository.save(confession);
     }
-
-    async updateConfessionReactions(confessionId: string, messageId: string, directCount?: number): Promise<void> {
-        try {
-            this.logger.log(`Updating reactions for confession: ${confessionId}, message: ${messageId}`);
-            
-            // Tìm confession theo ID
-            const confession = await this.confessionRepository.findOne({ 
-                where: { id: confessionId, messageId }
-            });
-            
-            if (!confession) {
-                this.logger.warn(`No confession found with ID: ${confessionId} and messageId: ${messageId}`);
-                return;
-            }
-            
-            // Nếu có số đếm trực tiếp, sử dụng nó
-            if (directCount !== undefined) {
-                confession.reactionCount = directCount;
-                this.logger.log(`Setting direct reaction count: ${directCount}`);
-            } else {
-                // Nếu không có số trực tiếp, chúng ta cộng thêm 1
-                confession.reactionCount = confession.reactionCount + 1;
-            }
-            
-            // Cập nhật confession
-            await this.confessionRepository.save(confession);
-            
-            this.logger.log(`Successfully updated confession reactions. New count: ${confession.reactionCount}`);
-            
-        } catch (error) {
-            this.logger.error(`Error updating confession reactions: ${error.message}`, error.stack);
-        }
-    }
-    
     /**
-     * Cập nhật số lượng reaction từ thông tin trực tiếp từ Mezon SDK
+     * Khi user thả reaction → cộng số lượng của người đó
      */
-    async updateConfessionReactionsDirect(messageId: string, totalReactions: number): Promise<void> {
-        try {
-            this.logger.log(`[REACTION UPDATE] Updating reactions for message ${messageId} with count ${totalReactions}`);
-            
-            // Tìm confession theo message ID
-            const confession = await this.confessionRepository.findOne({ 
-                where: { messageId }
-            });
-            
-            if (!confession) {
-                this.logger.warn(`[REACTION UPDATE] No confession found for messageId: ${messageId}`);
-                return;
-            }
-            
-            this.logger.log(`[REACTION UPDATE] Found confession #${confession.confessionNumber} with current reaction count: ${confession.reactionCount}`);
-            
-            // Chỉ cập nhật nếu số lượng reaction mới lớn hơn hoặc bằng số hiện tại
-            // Điều này ngăn chặn việc "giảm" số reaction không đúng khi gặp dữ liệu cũ
-            const previousCount = confession.reactionCount;
-            
-            if (totalReactions >= previousCount) {
-                confession.reactionCount = totalReactions;
-                
-                // Lưu confession
-                await this.confessionRepository.save(confession);
-                
-                this.logger.log(`[REACTION UPDATE] Updated confession #${confession.confessionNumber} (${confession.id}): reaction count increased from ${previousCount} to ${totalReactions}`);
-            } else {
-                this.logger.warn(`[REACTION UPDATE] Ignoring update: new count ${totalReactions} is less than current count ${previousCount} for confession #${confession.confessionNumber}`);
-                
-                // Nếu có sự khác biệt lớn, có thể có vấn đề đồng bộ hóa dữ liệu
-                if (previousCount - totalReactions > 5) {
-                    this.logger.warn(`[REACTION UPDATE] Large discrepancy detected between counts: current=${previousCount}, new=${totalReactions}, difference=${previousCount - totalReactions}`);
-                }
-            }
-        } catch (error) {
-            this.logger.error(`[REACTION UPDATE] Error in reaction update: ${error.message}`, error.stack);
-        }
-    }
-    
-    /**
-     * Cập nhật số lượng reaction của tất cả confession từ reaction logs
-     */
-    async updateAllConfessionReactions(): Promise<void> {
-        try {
-            this.logger.log('Cập nhật reaction cho tất cả confession từ logs...');
-            
-            // Lấy tất cả reaction logs
-            const reactionLogs = await this.reactionLogRepository.find();
-            
-            // Dùng Map để lưu số reaction theo messageId
-            const reactionCounts = new Map<string, number>();
-            
-            // Tính toán tổng số reaction cho mỗi message
-            for (const log of reactionLogs) {
-                if (log.messageId && log.reactions) {
-                    const total = Object.values(log.reactions)
-                        .reduce((sum, count) => sum + (count || 0), 0);
-                    
-                    reactionCounts.set(log.messageId, total);
-                }
-            }
-            
-            // Cập nhật các confession
-            for (const [messageId, count] of reactionCounts.entries()) {
-                await this.updateConfessionReactionsDirect(messageId, count);
-            }
-            
-            this.logger.log(`Đã cập nhật reaction cho ${reactionCounts.size} confession`);
-        } catch (error) {
-            this.logger.error(`Error updating all confession reactions: ${error.message}`, error.stack);
-        }
-    }
-    
-    /**
-     * Lấy chi tiết về các loại reaction của một confession
-     */
-    async getConfessionReactionDetails(confessionId: string): Promise<{ [key: string]: number } | null> {
-        try {
-            // Tìm confession
-            const confession = await this.confessionRepository.findOne({
-                where: { id: confessionId }
-            });
-            
-            if (!confession || !confession.messageId) {
-                return null;
-            }
-            
-            // Tìm reaction log
-            const reactionLog = await this.reactionLogRepository.findOne({
-                where: { confessionId, messageId: confession.messageId }
-            });
-            
-            if (!reactionLog || !reactionLog.reactions) {
-                return null;
-            }
-            
-            return reactionLog.reactions;
-        } catch (error) {
-            this.logger.error(`Error getting reaction details: ${error.message}`, error.stack);
-            return null;
-        }
-    }
-    
-    /**
-     * Lấy danh sách các confession cùng với chi tiết reaction
-     */
-    async getTopConfessionsWithReactionDetails(options: {
-        startDate?: Date;
-        endDate?: Date;
-        limit?: number;
-    }): Promise<Array<Confession & { reactionDetails?: { [key: string]: number } }>> {
-        // Lấy danh sách confession
-        const confessions = await this.getTopConfessions(options);
-        
-        this.logger.log(`Retrieved ${confessions.length} top confessions with details`);
-        
-        // Thêm chi tiết về reaction
-        const result = await Promise.all(
-            confessions.map(async (confession) => {
-                this.logger.log(`Processing confession #${confession.confessionNumber} for reaction details`);
-                
-                // Tìm reaction log
-                let reactionDetails = null;
-                
-                if (confession.messageId) {
-                    this.logger.log(`Looking up reactions for message ID: ${confession.messageId}`);
-                    const log = await this.reactionLogRepository.findOne({
-                        where: { messageId: confession.messageId }
-                    });
-                    
-                    if (log && log.reactions) {
-                        // Đảm bảo rằng tất cả giá trị là số hợp lệ
-                        const processedReactions: { [key: string]: number } = {};
-                        
-                        for (const [emoji, count] of Object.entries(log.reactions)) {
-                            if (typeof count === 'number') {
-                                processedReactions[emoji] = Math.floor(count);
-                            } else if (typeof count === 'string') {
-                                processedReactions[emoji] = parseInt(count);
-                            } else {
-                                processedReactions[emoji] = 0;
-                            }
-                        }
-                        
-                        reactionDetails = processedReactions;
-                        this.logger.log(`Confession #${confession.confessionNumber} has reactions: ${JSON.stringify(reactionDetails)}`);
-                    } else {
-                        this.logger.log(`No reaction log found for message ID: ${confession.messageId}`);
-                    }
-                }
-                
-                this.logger.log(`Finished processing confession #${confession.confessionNumber}`);
-                
-                return {
-                    ...confession,
-                    reactionDetails
-                };
-            })
-        );
-        
-        return result;
-    }
-
-    async updateReactionCount(messageId: string, reactions: { [key: string]: number }): Promise<void> {
+    async addUserReaction(messageId: string, emoji: string, userId: string, count: number) {
         const confession = await this.confessionRepository.findOne({ where: { messageId } });
-        
-        if (!confession) {
-            this.logger.warn(`No confession found for message ID: ${messageId}`);
-            return;
+        if (!confession) return;
+
+        // Cập nhật bảng reaction_user
+        let userReact = await this.reactionUserRepository.findOne({ where: { messageId, emoji, userId } });
+        if (!userReact) {
+            userReact = this.reactionUserRepository.create({ messageId, emoji, userId, count: 0 });
         }
+        userReact.count += count;
+        await this.reactionUserRepository.save(userReact);
+
+        // Cập nhật bảng reaction (tổng số emoji)
+        let reaction = await this.reactionRepository.findOne({ where: { messageId, emoji } });
+        if (!reaction) {
+            reaction = this.reactionRepository.create({ messageId, confessionId: confession.id, emoji, count: 0 });
+        }
+        reaction.count += count;
+        await this.reactionRepository.save(reaction);
+        this.logger.log(`[REACTION] ${emoji} +${count} by ${userId} → total now ${reaction.count}`);
+
+        await this.syncReactionTotal(confession.id);
+    }
+
+    /**
+     * Khi user bỏ reaction → xoá toàn bộ số lượng của người đó
+     */
+        async removeUserReaction(messageId: string, emoji: string, userId: string) {
+        const confession = await this.confessionRepository.findOne({ where: { messageId } });
+        if (!confession) return;
+
+        const userReact = await this.reactionUserRepository.findOne({ where: { messageId, emoji, userId } });
+        if (!userReact) return;
+
+        const toRemove = userReact.count;
+
+        // Xoá bản ghi của user
+        await this.reactionUserRepository.remove(userReact);
+
+        // Trừ tổng reaction tương ứng
+        const reaction = await this.reactionRepository.findOne({ where: { messageId, emoji } });
+        if (reaction) {
+            reaction.count = Math.max(0, reaction.count - toRemove);
+            if (reaction.count <= 0) {
+                await this.reactionRepository.remove(reaction);
+            } else await this.reactionRepository.save(reaction);
         
-        // Calculate total reactions
-        const totalCount = Object.values(reactions).reduce((sum, count) => sum + count, 0);
-        confession.reactionCount = totalCount;
-        
-        // Update the confession
-        await this.confessionRepository.save(confession);
-        
-        // Update or create reaction log
-        let reactionLog = await this.reactionLogRepository.findOne({ 
-            where: { messageId, confessionId: confession.id } 
-        });
-        
-        if (!reactionLog) {
-            reactionLog = this.reactionLogRepository.create({
+        }
+        this.logger.log(`[REACTION] ${emoji} removed by ${userId} (-${toRemove})`);
+
+
+        await this.syncReactionTotal(confession.id);
+    }
+
+    /**
+     * Cập nhật tổng reaction_count
+     */
+    private async syncReactionTotal(confessionId: string) {
+        const total = await this.reactionRepository
+            .createQueryBuilder('r')
+            .where('r.confessionId = :id', { id: confessionId })
+            .select('SUM(r.count)', 'sum')
+            .getRawOne();
+
+        const confession = await this.confessionRepository.findOne({ where: { id: confessionId } });
+        if (confession) {
+            confession.reactionCount = parseInt(total.sum || '0', 10);
+            await this.confessionRepository.save(confession);
+        }
+    }
+
+    // ================================
+    // REACTIONS LOGIC (USING Reaction ENTITY)
+    // ================================
+
+    /**
+     * Cộng thêm hoặc trừ reaction (per emoji).
+     * - Nếu reaction chưa tồn tại → tạo mới.
+     * - Nếu count giảm về 0 → xoá bản ghi.
+     * - Cập nhật tổng reaction_count trong confession.
+     */
+    async updateReactionCount(
+        messageId: string,
+        emoji: string,
+        delta: number, // +1 hoặc -1
+        ): Promise<void> {
+        try {
+            const confession = await this.confessionRepository.findOne({ where: { messageId } });
+            if (!confession) {
+            this.logger.warn(`[REACTION UPDATE] No confession found for message ${messageId}`);
+            return;
+            }
+
+            let reaction = await this.reactionRepository.findOne({ where: { messageId, emoji } });
+
+            // ✅ Nếu reaction chưa có và là ADD → tạo mới
+            if (!reaction && delta > 0) {
+            reaction = this.reactionRepository.create({
                 messageId,
                 confessionId: confession.id,
-                reactions,
-                totalCount,
+                emoji,
+                count: 1,
             });
-        } else {
-            reactionLog.reactions = reactions;
-            reactionLog.totalCount = totalCount;
+            await this.reactionRepository.save(reaction);
+            }
+            // ✅ Nếu reaction đã có → cộng / trừ
+            else if (reaction) {
+            const newCount = (reaction.count ?? 0) + delta;
+            if (newCount <= 0) {
+                await this.reactionRepository.remove(reaction);
+                this.logger.log(`[REACTION UPDATE] Removed ${emoji} (count=0)`);
+            } else {
+                reaction.count = newCount;
+                await this.reactionRepository.save(reaction);
+            }
+            }
+
+            // ✅ Recalculate total count for confession
+            const total = await this.reactionRepository
+            .createQueryBuilder('r')
+            .where('r.confessionId = :id', { id: confession.id })
+            .select('COALESCE(SUM(r.count), 0)', 'sum')
+            .getRawOne();
+
+            confession.reactionCount = parseInt(total.sum, 10) || 0;
+            await this.confessionRepository.save(confession);
+
+            this.logger.log(
+            `[REACTION UPDATE] ${emoji} delta=${delta} → total now ${confession.reactionCount}`,
+            );
+        } catch (error) {
+            this.logger.error(`[REACTION UPDATE] Error: ${error.message}`, error.stack);
         }
-        
-        await this.reactionLogRepository.save(reactionLog);
+        }
+
+    /**
+     * Lấy chi tiết các emoji reaction của một confession.
+     */
+    // Có sẵn:
+    async getReactionDetails(messageId: string): Promise<Record<string, number>> {
+    const reactions = await this.reactionRepository.find({ where: { messageId } });
+    const details: Record<string, number> = {};
+    for (const r of reactions) details[r.emoji] = r.count;
+    return details;
     }
 
+    // Thêm hàm tiện lợi lấy theo confessionId:
+    async getReactionDetailsByConfessionId(confessionId: string): Promise<Record<string, number>> {
+        const reactions = await this.reactionRepository.find({ where: { confessionId } });
+        const details: Record<string, number> = {};
+        for (const r of reactions) details[r.emoji] = r.count;
+        return details;
+    }
+
+    /**
+     * Đồng bộ lại tổng reaction_count cho tất cả confession (nếu cần).
+     */
+    async syncAllReactionCounts(): Promise<void> {
+    this.logger.log('[REACTION SYNC] Syncing all confession reaction counts...');
+
+    const confessions = await this.confessionRepository.find();
+    for (const confession of confessions) {
+        const total = await this.reactionRepository
+        .createQueryBuilder('r')
+        .where('r.confessionId = :id', { id: confession.id })
+        .select('SUM(r.count)', 'sum')
+        .getRawOne();
+
+        confession.reactionCount = parseInt(total.sum || '0', 10);
+        await this.confessionRepository.save(confession);
+    }
+
+    this.logger.log(`[REACTION SYNC] Done syncing all ${confessions.length} confessions.`);
+    }
+    // ================================
+    // UTILITIES
+    // ================================
+
+    private generateAuthorHash(ipAddress: string): string {
+        return crypto
+            .createHash('sha256')
+            .update(ipAddress + (process.env.HASH_SECRET ?? 'secret-salt'))
+            .digest('hex')
+            .substring(0, 10);
+    }
+    // ================================
+    // TOP CONFESSIONS
+    // ================================
+
+    /**
+     * Lấy danh sách các confession top theo số lượng reaction trong một khoảng thời gian.
+     */
     async getTopConfessions(options: {
         startDate?: Date;
         endDate?: Date;
         limit?: number;
     }): Promise<Confession[]> {
-        const { startDate, endDate, limit = 10 } = options;
-        
-        try {
-            // Trước khi lấy danh sách, cập nhật lại reaction count
-            await this.updateAllConfessionReactions();
-        
-            // Lấy danh sách confession được chấp nhận và có messageId (đã đăng)
-            const query = this.confessionRepository
-                .createQueryBuilder('confession')
-                .select([
-                    'confession.id',
-                    'confession.confessionNumber',
-                    'confession.content',
-                    'confession.messageId',
-                    'confession.postedAt',
-                    'confession.reactionCount',
-                    'confession.tags'
-                ])
-                .where('confession.status = :status', { status: ConfessionStatus.APPROVED })
-                .andWhere('confession.messageId IS NOT NULL')  // Đảm bảo đã được đăng
-                .orderBy('confession.reactionCount', 'DESC')
-                .take(limit);
-            
-            if (startDate) {
-                query.andWhere('confession.postedAt >= :startDate', { startDate });
-            }
-            
-            if (endDate) {
-                query.andWhere('confession.postedAt <= :endDate', { endDate });
-            }
-            
-            const confessions = await query.getMany();
-            
-            // Log kết quả để debug
-            this.logger.log(`Found ${confessions.length} top confessions.`);
-            if (confessions.length > 0) {
-                confessions.forEach((confession, i) => {
-                    this.logger.log(`Top #${i+1}: Confession #${confession.confessionNumber} (ID: ${confession.id}) has ${confession.reactionCount} reactions`);
-                });
-            }
-            
-            return confessions;
-        } catch (error) {
-            this.logger.error(`Error fetching top confessions: ${error.message}`, error.stack);
-            return [];
-        }
+    const { startDate, endDate, limit = 10 } = options;
+    try {
+        this.logger.log('[TOP CONFESSIONS] Fetching top confessions...');
+        await this.syncAllReactionCounts();
+
+        const query = this.confessionRepository
+        .createQueryBuilder('confession')
+        .select([
+            'confession.id',
+            'confession.confessionNumber',
+            'confession.content',
+            'confession.messageId',
+            'confession.postedAt',
+            'confession.reactionCount',
+            'confession.tags',
+        ])
+        .where('confession.status = :status', { status: ConfessionStatus.APPROVED })
+        .andWhere('confession.messageId IS NOT NULL')
+        .orderBy('confession.reactionCount', 'DESC')
+        .take(limit);
+
+        if (startDate) query.andWhere('confession.postedAt >= :startDate', { startDate });
+        if (endDate) query.andWhere('confession.postedAt <= :endDate', { endDate });
+
+        const confessions = await query.getMany();
+
+        this.logger.log(`[TOP CONFESSIONS] Found ${confessions.length} confessions.`);
+        return confessions;
+    } catch (error) {
+        this.logger.error(`[TOP CONFESSIONS] Error: ${error.message}`, error.stack);
+        return [];
+    }
     }
 
-    private generateAuthorHash(ipAddress: string): string {
-        // Create a consistent but anonymous hash
-        return crypto
-            .createHash('sha256')
-            .update(ipAddress + process.env.HASH_SECRET || 'secret-salt')
-            .digest('hex')
-            .substring(0, 10); // Take first 10 chars for brevity
+    /**
+     * Lấy top confession cùng chi tiết reaction emoji (từ bảng Reaction).
+     */
+    async getTopConfessionsWithReactionDetails(options: {
+        startDate?: Date;
+        endDate?: Date;
+        limit?: number;
+    }): Promise<Array<Confession & { reactionDetails?: Record<string, number> }>> {
+    const confessions = await this.getTopConfessions(options);
+
+    const results = await Promise.all(
+        confessions.map(async (confession) => {
+        const reactions = await this.reactionRepository.find({
+            where: { confessionId: confession.id },
+        });
+        const details: Record<string, number> = {};
+        for (const r of reactions) details[r.emoji] = r.count;
+
+        return {
+            ...confession,
+            reactionDetails: details,
+        };
+        }),
+    );
+    
+
+    return results;
     }
+
+    
+
+
 }

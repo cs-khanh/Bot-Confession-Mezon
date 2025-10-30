@@ -1,16 +1,24 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+} from 'typeorm';
+import { Reaction } from './reaction.entity';
 
 export enum ConfessionStatus {
-    PENDING = 'pending',
-    APPROVED = 'approved',
-    REJECTED = 'rejected',
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
 }
 
 @Entity()
 export class Confession {
     @PrimaryGeneratedColumn('uuid')
     id: string;
-    
+
     @Column({ name: 'confession_number', unique: true })
     confessionNumber: number;
 
@@ -19,7 +27,7 @@ export class Confession {
 
     @Column({ name: 'author_hash' })
     authorHash: string;
-    
+
     @Column({ type: 'jsonb', nullable: true })
     attachments: any[];
 
@@ -56,4 +64,10 @@ export class Confession {
 
     @UpdateDateColumn({ name: 'updated_at' })
     updatedAt: Date;
+
+    // ✅ Quan hệ 1-nhiều với Reaction
+    @OneToMany(() => Reaction, (reaction) => reaction.confession, {
+        cascade: true,
+    })
+    reactions: Reaction[];
 }

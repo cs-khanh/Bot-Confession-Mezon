@@ -10,11 +10,11 @@ import { AutoModerationService } from '@app/services/auto-moderation.service';
 import { ConfessionStatus } from '@app/entities/confession.entity';
 
 @Injectable()
-@Command('confess', {
+@Command('post', {
     description: 'Submit an anonymous confession to the channel',
-    usage: '!confess Your confession text here',
+    usage: '!post Your confession text here',
     category: 'Confession',
-    aliases: ['cf'],
+    aliases: ['p'],
 })
 export class ConfessCommand extends CommandMessage {
     private readonly logger = new Logger(ConfessCommand.name);
