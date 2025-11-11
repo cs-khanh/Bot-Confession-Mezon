@@ -69,13 +69,13 @@ Bot xử lý confession và đăng tin tức tự động cho cộng đồng Mez
 4. **Khởi động database bằng Docker**
 
    ```bash
-   docker-compose up -d postgres
+   docker compose up -d postgres
    ```
 
 5. **Chạy migration để tạo các bảng**
 
    ```bash
-   yarn migration:run
+   yarn db:run
    ```
 
 6. **Khởi động bot**

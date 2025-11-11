@@ -13,7 +13,7 @@ import { replyMessageGenerate } from '@app/utils/message';
 export class CommandService implements CommandInterface {
     public commandList: { [key: string]: CommandMessage };
     private readonly logger = new Logger(CommandService.name);
-    private readonly publicCommands = ['confess', 'about', 'help', 'ping'];
+    private readonly publicCommands = ['post', 'about', 'help', 'ping'];
 
     constructor(
         private readonly moduleRef: ModuleRef,

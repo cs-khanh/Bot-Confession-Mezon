@@ -6,7 +6,7 @@ import { CommandMessage } from '@app/command/common/command.abstract';
     description: 'Check bot latency and responsiveness',
     usage: '!ping',
     category: 'Utility',
-    aliases: ['p'],
+    aliases: ['pong'],
 })
 export class PingCommand extends CommandMessage {
     execute(args: string[], message: ChannelMessage) {

@@ -155,6 +155,7 @@ export class AutoModerationService {
         }
         
         const confessionId = confession.id.substring(0, 8).toUpperCase();
+        const confessionNumber = confession.confessionNumber || 'N/A';
         const emoji = decision === 'APPROVED' ? '✅' : '❌';
         const color = decision === 'APPROVED' ? '2ecc71' : 'e74c3c';
         const action = decision === 'APPROVED' ? 'phê duyệt' : 'từ chối';
@@ -163,7 +164,7 @@ export class AutoModerationService {
         const showFullContent = decision === 'REJECTED';
         
         const messageContent = [
-            `**${emoji} Tự động ${action} confession #${confessionId}**`,
+            `**${emoji} Tự động ${action} confession #${confessionNumber}**`,
             '',
             '```',
             showFullContent ? confession.content : confession.content.slice(0, 200) + (confession.content.length > 200 ? '...' : ''),
@@ -182,7 +183,7 @@ export class AutoModerationService {
             attachments: []
         };
         
-        this.logger.log(`Gửi thông báo tự động ${action} đến kênh kiểm duyệt cho confession ${confessionId}`);
+        this.logger.log(`Gửi thông báo tự động ${action} đến kênh kiểm duyệt cho confession ${confessionNumber}`);
         this.messageQueue.addMessage(noticeMessage);
     }
 }
