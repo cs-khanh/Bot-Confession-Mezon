@@ -26,13 +26,11 @@ import { ReactionLog } from '@app/entities/reaction-log.entity';
 import { WeeklyStats } from '@app/entities/weekly-stats.entity';
 import { AutoModerationService } from '@app/services/auto-moderation.service';
 import { NewsCommand } from '@app/command/news.command';
-import { TikTokCommand } from '@app/command/tiktok.command';
 import { CheckCommand } from '@app/command/check.command';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { NewsModule } from './news.module';
-import { TikTokModule } from './tiktok.module';
 import { Reaction } from '@app/entities/reaction.entity';
 import { ReactionUser } from '@app/entities/reaction-user.entity';
 
@@ -42,7 +40,6 @@ import { ReactionUser } from '@app/entities/reaction-user.entity';
         TypeOrmModule.forFeature([Confession, Reaction, ReactionUser, ReactionLog, WeeklyStats]),
 
         NewsModule,
-        TikTokModule,
         // TypeOrmModule.forFeature([]),
 
     ],
@@ -88,7 +85,6 @@ import { ReactionUser } from '@app/entities/reaction-user.entity';
         RejectCommand,
 
         NewsCommand,
-        TikTokCommand,
         CheckCommand,
         DBStatusCommand,
 

@@ -30,6 +30,8 @@ export class NewsCommand extends CommandMessage {
                 return await this.handlePost(message);
             case 'status':
                 return await this.handleStatus(message);
+            case 'clear':
+                return await this.handleDelete(message);
             default:
                 return this.replyMessageGenerate(
                     {
@@ -37,7 +39,8 @@ export class NewsCommand extends CommandMessage {
                             `#### Cách dùng:\n` +
                             `• \`!news crawl\` - Crawl tin tức ngay\n` +
                             `• \`!news post\` - Đăng tin tức chưa post\n` +
-                            `• \`!news status\` - Xem thống kê tin tức\n\n` +
+                            `• \`!news status\` - Xem thống kê tin tức\n` +
+                            `• \`!news clear\` - Xóa tất cả tin tức\n\n` +
                             `#### Lịch tự động:\n` +
                             `• Crawl: Mỗi 30 phút\n` +
                             `• Post: 8h sáng, 12h trưa, 4h chiều\n` +
@@ -51,24 +54,14 @@ export class NewsCommand extends CommandMessage {
 
     private async handleCrawl(message: ChannelMessage) {
         try {
-            await this.replyMessageGenerate(
-                {
-                    messageContent: '🔄 Đang crawl tin tức từ các nguồn...',
-                },
-                message,
-            );
+            // Trigger crawl với thông tin reply
+            await this.newsScheduler.triggerManualCrawl({
+                channelId: message.channel_id,
+                messageId: message.message_id,
+            });
 
-            await this.newsScheduler.triggerManualCrawl();
-
-            const unpostedCount = await this.newsService.getUnpostedNews(1000);
-
-            return this.replyMessageGenerate(
-                {
-                    messageContent: `### ✅ Crawl hoàn tất!\n\n` +
-                        `📰 Tin chưa đăng: ${unpostedCount.length} bài`,
-                },
-                message,
-            );
+            // Không cần reply ở đây vì triggerManualCrawl sẽ tự reply
+            return;
         } catch (error) {
             return this.replyMessageGenerate(
                 {
@@ -126,11 +119,15 @@ export class NewsCommand extends CommandMessage {
     private async handleStatus(message: ChannelMessage) {
         try {
             const categories = await this.newsService.getAllCategories();
-            const unposted = await this.newsService.getUnpostedNews(1000);
+            const total = await this.newsService.countAll();
+            const posted = await this.newsService.countPosted();
+            const unposted = await this.newsService.countUnposted();
 
             let statusMessage = `### 📊 Thống Kê Tin Tức\n\n`;
-            statusMessage += `📰 Tổng tin chưa đăng: ${unposted.length} bài\n\n`;
-            statusMessage += `#### Phân loại theo chủ đề:\n`;
+            statusMessage += `📰 **Tổng số tin**: ${total} bài\n`;
+            statusMessage += `✅ Đã đăng: ${posted} bài\n`;
+            statusMessage += `📝 Chưa đăng: ${unposted} bài\n\n`;
+            statusMessage += `#### Phân loại theo chủ đề (chưa đăng):\n`;
 
             for (const category of categories) {
                 const categoryNews = await this.newsService.getUnpostedNewsByCategory(category, 1000);
@@ -149,6 +146,51 @@ export class NewsCommand extends CommandMessage {
             return this.replyMessageGenerate(
                 {
                     messageContent: `❌ Lỗi khi lấy thống kê: ${error.message}`,
+                },
+                message,
+            );
+        }
+    }
+
+    private async handleDelete(message: ChannelMessage) {
+        try {
+            const totalCount = await this.newsService.countAll();
+            const postedCount = await this.newsService.countPosted();
+            const unpostedCount = await this.newsService.countUnposted();
+            
+            if (totalCount === 0) {
+                return this.replyMessageGenerate(
+                    {
+                        messageContent: `ℹ️ Không có tin tức nào trong database.`,
+                    },
+                    message,
+                );
+            }
+
+            await this.replyMessageGenerate(
+                {
+                    messageContent: `🗑️ Đang xóa ${totalCount} tin tức...\n` +
+                        `(Đã đăng: ${postedCount}, Chưa đăng: ${unpostedCount})`,
+                },
+                message,
+            );
+
+            const deleted = await this.newsService.deleteAll();
+
+            return this.replyMessageGenerate(
+                {
+                    messageContent: `### ✅ Xóa tin tức hoàn tất!\n\n` +
+                        `🗑️ Đã xóa: ${deleted} tin tức\n` +
+                        `📝 Trong đó:\n` +
+                        `• Đã đăng: ${postedCount} bài\n` +
+                        `• Chưa đăng: ${unpostedCount} bài`,
+                },
+                message,
+            );
+        } catch (error) {
+            return this.replyMessageGenerate(
+                {
+                    messageContent: `❌ Lỗi khi xóa tin: ${error.message}`,
                 },
                 message,
             );
