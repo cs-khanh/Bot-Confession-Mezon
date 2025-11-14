@@ -116,6 +116,39 @@ export class NewsService {
 
         return result.map(r => r.category);
     }
+
+    /**
+     * Xóa tất cả tin tức
+     */
+    async deleteAll(): Promise<number> {
+        const result = await this.newsRepository
+            .createQueryBuilder()
+            .delete()
+            .execute();
+
+        return result.affected || 0;
+    }
+
+    /**
+     * Đếm tổng số tin tức
+     */
+    async countAll(): Promise<number> {
+        return await this.newsRepository.count();
+    }
+
+    /**
+     * Đếm số tin đã đăng
+     */
+    async countPosted(): Promise<number> {
+        return await this.newsRepository.count({ where: { posted: true } });
+    }
+
+    /**
+     * Đếm số tin chưa đăng
+     */
+    async countUnposted(): Promise<number> {
+        return await this.newsRepository.count({ where: { posted: false } });
+    }
 }
 
 

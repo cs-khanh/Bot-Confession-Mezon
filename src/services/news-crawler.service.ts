@@ -73,6 +73,13 @@ export class NewsCrawlerService {
     }
 
     /**
+     * Delay helper để rate limiting (30 requests/phút = 1 request/2 giây)
+     */
+    private async delay(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    /**
      * Crawl tất cả các nguồn tin
      */
     async crawlAllSources(): Promise<void> {
@@ -81,8 +88,12 @@ export class NewsCrawlerService {
         for (const source of this.newsSources) {
             try {
                 await this.crawlSource(source);
+                // Delay 2 giây giữa các nguồn RSS để rate limiting (30 requests/phút)
+                await this.delay(5000);
             } catch (error) {
                 this.logger.error(`Error crawling ${source.name}: ${error.message}`);
+                // Vẫn delay ngay cả khi lỗi để tránh spam
+                await this.delay(5000);
             }
         }
 
@@ -96,7 +107,11 @@ export class NewsCrawlerService {
         try {
             this.logger.log(`Crawling ${source.name}...`);
 
+            // Parse RSS feed (1 request)
             const feed = await this.parser.parseURL(source.url);
+            
+            // Delay 2 giây sau khi parse RSS để rate limiting
+            await this.delay(5000);
 
             if (!feed.items || feed.items.length === 0) {
                 this.logger.warn(`No items found in ${source.name}`);
@@ -105,25 +120,33 @@ export class NewsCrawlerService {
 
             let newArticlesCount = 0;
 
-            for (const item of feed.items.slice(0, 10)) { // Limit to 10 latest articles
+            for (const item of feed.items.slice(0, 1)) { // Limit to 3 latest articles
                 try {
                     // Check if article already exists
                     if (await this.newsService.existsByLink(item.link!)) {
+                        // Delay ngay cả khi skip để đảm bảo rate limiting
+                        await this.delay(5000);
                         continue;
                     }
 
-                    // Extract content
+                    // Clean title (decode HTML entities)
+                    const cleanedTitle = this.cleanTitle(item.title);
+
+                    // Extract content (có thể tạo request HTTP)
                     const content = await this.extractContent(item.link!, item.contentSnippet || '');
+                    
+                    // Delay 2 giây sau mỗi request để rate limiting (30 requests/phút)
+                    await this.delay(5000);
                     
                     // Generate summary using Gemini
                     const summary = await this.geminiService.summarizeNews(
-                        item.title || '',
+                        cleanedTitle,
                         content,
                     );
 
                     // Determine category (use source category or auto-categorize)
                     const category = source.category || await this.geminiService.categorizeNews(
-                        item.title || '',
+                        cleanedTitle,
                         content,
                     );
 
@@ -133,7 +156,7 @@ export class NewsCrawlerService {
                     // Save to database
                     await this.newsService.create({
                         link: item.link!,
-                        title: item.title || 'Untitled',
+                        title: cleanedTitle,
                         summary,
                         category,
                         source: source.name,
@@ -141,9 +164,12 @@ export class NewsCrawlerService {
                     });
 
                     newArticlesCount++;
-                    this.logger.log(`Saved: ${item.title}`);
+                    this.logger.log(`Saved: ${cleanedTitle}`);
                 } catch (error) {
-                    this.logger.error(`Error processing article ${item.title}: ${error.message}`);
+                    const title = item.title ? this.cleanTitle(item.title) : 'Unknown';
+                    this.logger.error(`Error processing article ${title}: ${error.message}`);
+                    // Delay ngay cả khi lỗi để rate limiting
+                    await this.delay(5000);
                 }
             }
 
@@ -152,6 +178,208 @@ export class NewsCrawlerService {
             this.logger.error(`Error crawling source ${source.name}: ${error.message}`);
             throw error;
         }
+    }
+
+    /**
+     * Làm sạch tiêu đề: decode HTML entities và loại bỏ HTML tags
+     */
+    private cleanTitle(title: string | undefined): string {
+        if (!title) {
+            return 'Untitled';
+        }
+
+        let cleanedTitle = title;
+
+        // Decode numeric HTML entities (&#039; -> ', &#8217; -> ', etc.)
+        cleanedTitle = cleanedTitle.replace(/&#(\d+);/g, (match, dec) => {
+            return String.fromCharCode(parseInt(dec, 10));
+        });
+
+        // Decode hexadecimal HTML entities (&#x27; -> ', etc.)
+        cleanedTitle = cleanedTitle.replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => {
+            return String.fromCharCode(parseInt(hex, 16));
+        });
+
+        // Bảng mapping đầy đủ các HTML entities (decode &amp; cuối cùng)
+        const htmlEntities: { [key: string]: string } = {
+            // Basic HTML entities
+            '&quot;': '"',
+            '&apos;': "'",
+            '&#039;': "'",
+            '&lt;': '<',
+            '&gt;': '>',
+            '&nbsp;': ' ',
+            '&copy;': '©',
+            '&reg;': '®',
+            '&trade;': '™',
+            '&hellip;': '…',
+            '&mdash;': '—',
+            '&ndash;': '–',
+            '&lsquo;': '\u2018',
+            '&rsquo;': '\u2019',
+            '&ldquo;': '\u201C',
+            '&rdquo;': '\u201D',
+            '&sbquo;': '‚',
+            '&bdquo;': '„',
+            '&dagger;': '†',
+            '&Dagger;': '‡',
+            '&permil;': '‰',
+            '&lsaquo;': '‹',
+            '&rsaquo;': '›',
+            '&oline;': '‾',
+            '&euro;': '€',
+            '&pound;': '£',
+            '&yen;': '¥',
+            '&cent;': '¢',
+            '&curren;': '¤',
+            '&brvbar;': '¦',
+            '&sect;': '§',
+            '&uml;': '¨',
+            '&ordf;': 'ª',
+            '&ordm;': 'º',
+            '&not;': '¬',
+            '&shy;': '',
+            '&macr;': '¯',
+            '&deg;': '°',
+            '&plusmn;': '±',
+            '&sup2;': '²',
+            '&sup3;': '³',
+            '&acute;': '´',
+            '&micro;': 'µ',
+            '&para;': '¶',
+            '&middot;': '·',
+            '&cedil;': '¸',
+            '&sup1;': '¹',
+            '&frac14;': '¼',
+            '&frac12;': '½',
+            '&frac34;': '¾',
+            '&iquest;': '¿',
+            '&times;': '×',
+            '&divide;': '÷',
+            // Vietnamese characters (lowercase)
+            '&aacute;': 'á',
+            '&agrave;': 'à',
+            '&atilde;': 'ã',
+            '&acirc;': 'â',
+            '&auml;': 'ä',
+            '&aring;': 'å',
+            '&aelig;': 'æ',
+            '&ccedil;': 'ç',
+            '&eacute;': 'é',
+            '&egrave;': 'è',
+            '&ecirc;': 'ê',
+            '&euml;': 'ë',
+            '&iacute;': 'í',
+            '&igrave;': 'ì',
+            '&iuml;': 'ï',
+            '&oacute;': 'ó',
+            '&ograve;': 'ò',
+            '&otilde;': 'õ',
+            '&ocirc;': 'ô',
+            '&ouml;': 'ö',
+            '&oslash;': 'ø',
+            '&uacute;': 'ú',
+            '&ugrave;': 'ù',
+            '&uuml;': 'ü',
+            '&yacute;': 'ý',
+            '&yuml;': 'ÿ',
+            // Vietnamese characters (uppercase)
+            '&Aacute;': 'Á',
+            '&Agrave;': 'À',
+            '&Atilde;': 'Ã',
+            '&Acirc;': 'Â',
+            '&Auml;': 'Ä',
+            '&Aring;': 'Å',
+            '&AElig;': 'Æ',
+            '&Ccedil;': 'Ç',
+            '&Eacute;': 'É',
+            '&Egrave;': 'È',
+            '&Ecirc;': 'Ê',
+            '&Euml;': 'Ë',
+            '&Iacute;': 'Í',
+            '&Igrave;': 'Ì',
+            '&Iuml;': 'Ï',
+            '&Oacute;': 'Ó',
+            '&Ograve;': 'Ò',
+            '&Otilde;': 'Õ',
+            '&Ocirc;': 'Ô',
+            '&Ouml;': 'Ö',
+            '&Oslash;': 'Ø',
+            '&Uacute;': 'Ú',
+            '&Ugrave;': 'Ù',
+            '&Uuml;': 'Ü',
+            '&Yacute;': 'Ý',
+            // Special Vietnamese characters
+            '&eth;': 'đ',
+            '&ETH;': 'Đ',
+            // Greek letters (common)
+            '&alpha;': 'α',
+            '&beta;': 'β',
+            '&gamma;': 'γ',
+            '&delta;': 'δ',
+            '&epsilon;': 'ε',
+            '&zeta;': 'ζ',
+            '&eta;': 'η',
+            '&theta;': 'θ',
+            '&iota;': 'ι',
+            '&kappa;': 'κ',
+            '&lambda;': 'λ',
+            '&mu;': 'μ',
+            '&nu;': 'ν',
+            '&xi;': 'ξ',
+            '&pi;': 'π',
+            '&rho;': 'ρ',
+            '&sigma;': 'σ',
+            '&tau;': 'τ',
+            '&upsilon;': 'υ',
+            '&phi;': 'φ',
+            '&chi;': 'χ',
+            '&psi;': 'ψ',
+            '&omega;': 'ω',
+            '&Alpha;': 'Α',
+            '&Beta;': 'Β',
+            '&Gamma;': 'Γ',
+            '&Delta;': 'Δ',
+            '&Epsilon;': 'Ε',
+            '&Zeta;': 'Ζ',
+            '&Eta;': 'Η',
+            '&Theta;': 'Θ',
+            '&Iota;': 'Ι',
+            '&Kappa;': 'Κ',
+            '&Lambda;': 'Λ',
+            '&Mu;': 'Μ',
+            '&Nu;': 'Ν',
+            '&Xi;': 'Ξ',
+            '&Pi;': 'Π',
+            '&Rho;': 'Ρ',
+            '&Sigma;': 'Σ',
+            '&Tau;': 'Τ',
+            '&Upsilon;': 'Υ',
+            '&Phi;': 'Φ',
+            '&Chi;': 'Χ',
+            '&Psi;': 'Ψ',
+            '&Omega;': 'Ω',
+        };
+
+        // Decode tất cả named HTML entities (trừ &amp; để decode cuối cùng)
+        for (const [entity, char] of Object.entries(htmlEntities)) {
+            cleanedTitle = cleanedTitle.replace(new RegExp(entity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), char);
+        }
+
+        // Decode &amp; cuối cùng để tránh decode lại
+        cleanedTitle = cleanedTitle.replace(/&amp;/g, '&');
+
+        // Sử dụng cheerio để loại bỏ HTML tags nếu có
+        const $ = cheerio.load(cleanedTitle);
+        cleanedTitle = $.text().trim();
+
+        // Loại bỏ khoảng trắng thừa và các ký tự đặc biệt không mong muốn
+        cleanedTitle = cleanedTitle
+            .replace(/\s+/g, ' ')
+            .replace(/[\u200B-\u200D\uFEFF]/g, '') // Loại bỏ zero-width characters
+            .trim();
+
+        return cleanedTitle || 'Untitled';
     }
 
     /**

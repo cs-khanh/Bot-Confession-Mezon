@@ -4,7 +4,6 @@ import * as Joi from '@hapi/joi';
 import { BotModule } from '@app/modules/bot.module';
 import { MezonModule } from '@app/modules/mezon.module';
 import { NewsModule } from '@app/modules/news.module';
-import { TikTokModule } from '@app/modules/tiktok.module';
 import { HealthController } from '@app/controllers/health.controller';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -54,7 +53,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
         }),
         BotModule,
         NewsModule,
-        TikTokModule,
 
     ],
     controllers: [HealthController],
